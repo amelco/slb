@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 #define SLB_STRING_IMPLEMENTATION
-#include "slb_string.h"
+#include "../slb_string.h"
 
 int main(int argc, char** argv)
 {
@@ -17,16 +17,16 @@ int main(int argc, char** argv)
 
     char *a = "hello ";
     char *b = "world";
-    Slb_string as = slb_string_create_from_cstr(a);
-    Slb_string bs = slb_string_create_from_cstr(b);
+    // Slb_string as = slb_string_create_from_cstr(a);
+    // Slb_string bs = slb_string_create_from_cstr(b);
 
-    printf("Capacity: %zu, Size: %zu\nContent: %s\n\n", as.capacity, as.size, as.content);
-    printf("Capacity: %zu, Size: %zu\nContent: %s\n\n", bs.capacity, bs.size, bs.content);
+    // printf("Capacity: %zu, Size: %zu\nContent: %s\n\n", as.capacity, as.size, as.content);
+    // printf("Capacity: %zu, Size: %zu\nContent: %s\n\n", bs.capacity, bs.size, bs.content);
 
-    slb_string_close(&bs);
+    // slb_string_close(&bs);
     return 0;
 
-    slb_string_append(&as, &bs);
+    // slb_string_append(&as, &bs);
 
     return 0;
 }

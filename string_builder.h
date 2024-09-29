@@ -6,7 +6,7 @@
 #include <assert.h>
 
 #define INITIAL_CAPACITY 1024
-#define GIGABYTE 1024 * 1024 * 1024
+#define GIGABYTE (1024 * 1024 * 1024)
 #define bool int
 #define true 1
 #define false 0
@@ -15,21 +15,33 @@ typedef struct {
   char* content;
   size_t capacity;
   size_t length;
+  size_t index;    // used in index_of and next_index. >=0: index; -1: never called; -2: no more entries
+  char last_searched_char;
 } String;
 
 typedef struct {
-  String* elements;
-  size_t length;
+  String* items;
+  size_t size;
 } StringList;
 
 size_t cstring_len(char* text);
 String string_new(char* text);
-void string_free(String* str);
-void string_append(String* str, char* text);
+void   string_free(String* str);
+void   string_append(String* str, char* text);
+size_t string_index_of(String* str, char c);
+size_t string_next_index(String* str);
+String string_substring(String str, size_t ini, size_t end);
+
 StringList string_split(String str, char separator);
-void stringlist_free(StringList* str_list);
+void       stringlist_free(StringList* str_list);
+
+#endif //STRING_BUILDER_H
+
 
 #ifdef STRING_BUILDER_IMPLEMENTATION
+
+#define IDX_NEVER_CALLED (-1ul)
+#define IDX_NO_MORE_ENTRIES (-2ul)
 
 void panic(char* message) {
   fprintf(stderr, "%s\n", message);
@@ -54,6 +66,8 @@ String string_new(char* text) {
     .length = len,
     .capacity = capacity,
     .content = malloc(INITIAL_CAPACITY),
+    .index = IDX_NEVER_CALLED,
+    .last_searched_char = '\0',
   };
   assert(str.content && "Buy more RAM");
   memcpy(str.content, text, cstring_len(text));
@@ -63,7 +77,9 @@ String string_new(char* text) {
 void string_free(String* str) {
   str->length = 0;
   str->capacity = 0;
+  str->index = IDX_NEVER_CALLED;
   free(str->content);
+  str->content = NULL;
 }
 
 void string_append(String* str, char* text) {
@@ -81,6 +97,47 @@ void string_append(String* str, char* text) {
   }
   memcpy(str->content + str->length, text, cstring_len(text));
   str->length = new_len;
+}
+
+size_t __private_string_index_of(String str, size_t start, char c) {
+  for (size_t i = start; i < str.length; ++i) {
+    if (str.content[i] == c)
+      return i;
+  }
+  return IDX_NO_MORE_ENTRIES;
+}
+
+// must be called first when searching for the same char several times
+size_t string_index_of(String* str, char c) {
+  str->index = IDX_NEVER_CALLED;
+  str->last_searched_char = c;
+  str->index = __private_string_index_of(*str, 0, c);
+  return str->index;
+}
+
+// must be called after calling string_index_of when wanted to look for other occurrencies of the same char in the same string. If search function never called before, call it.
+size_t string_next_index(String* str) {
+  if (str->index == IDX_NEVER_CALLED)
+    return IDX_NEVER_CALLED;
+  str->index = __private_string_index_of(*str, str->index + 1, str->last_searched_char);
+  return str->index;
+}
+
+// returns a substring given a initial (inclusive) and end (exclusive) indices.
+// returns NULL if fails
+// must be free'd
+String string_substring(String str, size_t ini, size_t end) {
+  if (ini >= end || ini < 0 || end > str.length) return string_new("");
+
+  int size = end - ini;
+  char* new_cstr = malloc(size * sizeof(char));
+  int j = 0;
+  for (int i = ini; i < end; ++i) {
+    new_cstr[j++] = str.content[i];
+  }
+  String new_string = string_new(new_cstr);
+  free(new_cstr);
+  return new_string;
 }
 
 StringList string_split(String str, char separator) {
@@ -115,19 +172,21 @@ StringList string_split(String str, char separator) {
   }
 
   StringList list = {
-    .elements = splits,
-    .length = num_elems,
+    .items = splits,
+    .size = num_elems,
   };
   
   return list;
 }
 
 void stringlist_free(StringList* str_list) {
-  for (int i = 0; i < str_list->length; ++i) {
-    free(str_list->elements[i].content);
+  for (int i = 0; i < str_list->size; ++i) {
+    free(str_list->items[i].content);
+    str_list->items[i].content = NULL;
   }
-  free(str_list->elements);
+  free(str_list->items);
+  str_list->items = NULL;
+  str_list->size = 0;
 }
 
 #endif //STRING_BUILDER_IMPLEMENTATION
-#endif //STRING_BUILDER_H

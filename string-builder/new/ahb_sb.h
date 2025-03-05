@@ -1,21 +1,24 @@
-#ifndef STRING_BUILDER_H
-#define STRING_BUILDER_H
+#ifndef AHB_SB_H
+#define AHB_SB_H
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdbool.h>
+
+// TODO: implement to pass an arena to the alloations take place
 
 #define INITIAL_CAPACITY 1024
 #define GIGABYTE (1024 * 1024 * 1024)
-#define bool int
-#define true 1
-#define false 0
 
 typedef struct {
   char* content;
   size_t capacity;
   size_t length;
-  size_t index;    // used in index_of and next_index. >=0: index; -1: never called; -2: no more entries
+  size_t index;     // Used in string_index_of() and string_next_index()
+                    // If >= 0, it's the index 
+                    // If   -1, IDX_NEVER_CALLED
+                    // If   -2, IDX_NO_MORE_ENTRIES
   char last_searched_char;
 } String;
 
@@ -25,23 +28,27 @@ typedef struct {
 } StringList;
 
 size_t cstring_len(char* text);
+
 String string_new(char* text);
 void   string_free(String* str);
 void   string_append(String* str, char* text);
 size_t string_index_of(String* str, char c);
-size_t string_next_index(String* str);
-String string_substring(String str, size_t ini, size_t end);
+size_t string_next_index(String* str);                        // Returns the next index of the previously called string_index_of(). Calls string_index_of() if it wasn't called before.
+                                                              // No more characters: returns IDX_NO_MORE_ENTRIES
+String string_substring(String str, size_t ini, size_t end);  // ini (inclusive), end (exclusive)
+//String string_concat(String str1, ...);  TODO: concatenation function with variadic arguments (all String type)
+char*  string_to_cstr(String str);
 
 StringList string_split(String str, char separator);
 void       stringlist_free(StringList* str_list);
 
-#endif //STRING_BUILDER_H
+#endif //AHB_SB_H
 
+// -----------------------------------------------------------
+#ifdef AHB_SB_IMPLEMENTATION
 
-#ifdef STRING_BUILDER_IMPLEMENTATION
-
-#define IDX_NEVER_CALLED (-1ul)
-#define IDX_NO_MORE_ENTRIES (-2ul)
+#define IDX_NEVER_CALLED (-1l)
+#define IDX_NO_MORE_ENTRIES (-2l)
 
 void panic(char* message) {
   fprintf(stderr, "%s\n", message);
@@ -65,7 +72,7 @@ String string_new(char* text) {
   String str = {
     .length = len,
     .capacity = capacity,
-    .content = malloc(INITIAL_CAPACITY),
+    .content = calloc(INITIAL_CAPACITY, sizeof(char)),
     .index = IDX_NEVER_CALLED,
     .last_searched_char = '\0',
   };
@@ -87,6 +94,7 @@ void string_append(String* str, char* text) {
   size_t new_len = text_len + str->length;
   bool need_realloc = new_len > str->capacity;
   while (new_len > str->capacity) {
+    printf("len: %zu  > cap: %zu\n", new_len, str->capacity);
     str->capacity *= 2;
     if (str->capacity > GIGABYTE) panic("String is too long (> 1 GB)");
   }
@@ -126,18 +134,24 @@ size_t string_next_index(String* str) {
 // returns a substring given a initial (inclusive) and end (exclusive) indices.
 // returns NULL if fails
 // must be free'd
+// TODO: it is not memory sanitized when compiling with memory sanitization. Fix it!
 String string_substring(String str, size_t ini, size_t end) {
   if (ini >= end || ini < 0 || end > str.length) return string_new("");
+  size_t size = end - ini;
 
-  int size = end - ini;
-  char* new_cstr = malloc(size * sizeof(char));
-  int j = 0;
-  for (int i = ini; i < end; ++i) {
-    new_cstr[j++] = str.content[i];
-  }
-  String new_string = string_new(new_cstr);
-  free(new_cstr);
+  String new_string = {0};
+  new_string.length = size;
+  new_string.capacity = INITIAL_CAPACITY;
+  new_string.content = calloc(INITIAL_CAPACITY, sizeof(char));
+  assert(new_string.content && "Buy more RAM");
+
+  memcpy(new_string.content, str.content + ini, size);
+  new_string.content[size] = '\0';
   return new_string;
+}
+
+char* string_to_cstr(String str) {
+  return str.content;
 }
 
 StringList string_split(String str, char separator) {

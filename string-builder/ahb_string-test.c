@@ -1,5 +1,8 @@
-#define STRING_BUILDER_IMPLEMENTATION
-#include "string_builder.h"
+#define AHB_STRING_IMPLEMENTATION
+#include "ahb_string.h"
+
+#define AHB_ARENA_IMPLEMENTATION
+#include "../arena/ahb_arena.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -9,6 +12,10 @@ int main()
   String teste = string_new("Hello, World!");
   assert(teste.length == 13);
   assert(teste.length < teste.capacity);
+
+  char* cstr = string_to_cstr(teste);
+  assert(strcmp(cstr, teste.content) == 0);
+  assert(cstr[teste.length] == '\0');
 
   string_append(&teste, " Ola Mundo!");
   assert(teste.length == 24);

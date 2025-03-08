@@ -1,5 +1,5 @@
 /*
- * This library builds string WITH arenas only
+ * This library builds string WITH or WITHOUT arenas
  * */
 #ifndef AHB_SB_H
 #define AHB_SB_H
@@ -9,8 +9,18 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#define AHB_ARENA_IMPLEMENTATION
-#include "ahb_arena.h"
+// When using arena, the caller is responsable to (de)allocate it properly.
+// The caller also has to inform the arena function that adds an element and return a pointer
+//   to that element to be used as a callback by this library when it needs to allocate memory. 
+#ifdef AHB_SB_USEARENA
+  #define ARENA  // for short use, instead of AHB_SB_USEARENA inside this file
+  #define AHB_ARENA_IMPLEMENTATION
+  #include "ahb_arena.h"
+  Arena a = {0};
+  void (*cb)(Arena*, size_t);
+#else
+  #define HAS_ARENA false
+#endif // AHB_SB_USEARENA
 
 #define INITIAL_CAPACITY (64 * 1024)         //  64 KB
 #define MAX_CAPACITY     (128 * 1024 * 1024) // 128 MB
@@ -33,24 +43,41 @@ typedef struct {
 } StringList;
 
 /* -- Functions ---------------------------------------------------------- */
-void ahb_sb_init_arena(size_t size);    // If size = 0, uses the library's default
-
 size_t cstring_len(char* text);
 
-String string_new(char* text);
+String string_new(char* text
+#ifdef ARENA
+        , void* a, void* (*cb)(Arena*, size_t)
+#endif // ARENA
+        );
 
+#ifndef ARENA
 void   string_free(String* str);
+#endif // ARENA
 
-void   string_append(String* str, char* text);
+void   string_append(String* str, char* text
+#ifdef ARENA
+        , void* a, void* (*cb)(Arena*, size_t)
+#endif
+        );
 
 size_t string_index_of(String* str, char c);
 size_t string_next_index(String* str);                        // Returns the next index of the previously called string_index_of(). Calls string_index_of() if it wasn't called before.
                                                               // No more characters: returns IDX_NO_MORE_ENTRIES
-String string_substring(String str, size_t ini, size_t end);  // ini (inclusive), end (exclusive)
+String string_substring(String str, size_t ini, size_t end    // ini (inclusive), end (exclusive)
+#ifdef ARENA
+        , void* a, void* (*cb)(Arena*, size_t)
+#endif
+        );
+
 //String string_concat(String str1, ...);  TODO: concatenation function with variadic arguments (all String type)
 char*  string_to_cstr(String str);
 
-StringList string_split(String str, char separator);
+StringList string_split(String str, char separator
+#ifdef ARENA
+        , void* a, void* (*cb)(Arena*, size_t)
+#endif
+        );
 void       stringlist_free(StringList* str_list);
 
 #endif //AHB_SB_H
@@ -60,9 +87,6 @@ void       stringlist_free(StringList* str_list);
 
 #define IDX_NEVER_CALLED (-1l)
 #define IDX_NO_MORE_ENTRIES (-2l)
-
-/* -- Globals ------------------------------------------------------------ */
-Arena a = {0};
 
 void panic(char* message) {
   fprintf(stderr, "%s\n", message);
@@ -75,12 +99,11 @@ size_t cstring_len(char* text) {
   return i - 1;
 }
 
-void ahb_sb_init_arena(size_t size) {
-    if (size == 0) arena_alloc(&a);
-    else arena_alloc_size(&a, size);
-}
-
-String string_new(char* text) {
+String string_new(char* text
+#ifdef ARENA
+        , void* a, void* (*cb)(Arena*, size_t)
+#endif
+        ) {
   size_t len = cstring_len(text);
   size_t capacity = INITIAL_CAPACITY;
   while (len > capacity) {
@@ -94,8 +117,11 @@ String string_new(char* text) {
     .index = IDX_NEVER_CALLED,
     .last_searched_char = '\0',
   };
-  str.content = arena_add(&a, INITIAL_CAPACITY * sizeof(char));
-
+#ifdef ARENA
+  str.content = cb(a, INITIAL_CAPACITY * sizeof(char));
+#else
+  str.content = calloc(INITIAL_CAPACITY, sizeof(char)),
+#endif
   assert(str.content && "Buy more RAM");
   memcpy(str.content, text, cstring_len(text));
   return str;
@@ -109,7 +135,11 @@ void string_free(String* str) {
   str->content = NULL;
 }
 
-void string_append(String* str, char* text) {
+void string_append(String* str, char* text
+#ifdef ARENA
+        , void* a, void* (*cb)(Arena*, size_t)
+#endif
+        ) {
   size_t text_len = cstring_len(text);
   size_t new_len = text_len + str->length;
   bool need_realloc = new_len > str->capacity;
@@ -120,7 +150,11 @@ void string_append(String* str, char* text) {
   }
 
   if (need_realloc) {
-    str->content = arena_add(&a, str->capacity);
+#ifdef ARENA
+    str->content = cb(a, str->capacity);
+#else
+    str->content = realloc(str->content, str->capacity);
+#endif
     assert(str->content && "Buy more RAM");
   }
   memcpy(str->content + str->length, text, cstring_len(text));
@@ -154,16 +188,28 @@ size_t string_next_index(String* str) {
 // returns a substring given a initial (inclusive) and end (exclusive) indices.
 // returns NULL if fails
 // must be free'd
-String string_substring(String str, size_t ini, size_t end) {
+String string_substring(String str, size_t ini, size_t end
+#ifdef ARENA
+        , void* a, void* (*cb)(Arena*, size_t)
+#endif
+        ) {
   if (ini >= end || ini < 0 || end > str.length) { 
-      return string_new("");
+      return string_new(""
+#ifdef ARENA
+              , a, cb
+#endif
+          );
   }
   size_t size = end - ini;
 
   String new_string = {0};
   new_string.length = size;
   new_string.capacity = INITIAL_CAPACITY;
-  new_string.content = arena_add(&a, INITIAL_CAPACITY * sizeof(char));
+#ifdef ARENA
+  new_string.content = cb(a, INITIAL_CAPACITY * sizeof(char));
+#else
+  new_string.content = calloc(INITIAL_CAPACITY, sizeof(char));
+#endif
   assert(new_string.content && "Buy more RAM");
 
   memcpy(new_string.content, str.content + ini, size);
@@ -175,7 +221,11 @@ char* string_to_cstr(String str) {
   return str.content;
 }
  
-StringList string_split(String str, char separator) {
+StringList string_split(String str, char separator
+#ifdef ARENA
+        , void* a, void* (*cb)(Arena*, size_t)
+#endif
+        ) {
   int num_elems = 1;
   for (int i = 0; i < str.length; ++i) {
     if (str.content[i] == separator) {
@@ -183,7 +233,11 @@ StringList string_split(String str, char separator) {
     }
   }
   
-  String* splits = arena_add(&a, num_elems * sizeof(String));
+#ifdef ARENA
+  String* splits = cb(a, num_elems * sizeof(String));
+#else
+  String* splits = malloc(num_elems * sizeof(String));
+#endif
   assert(splits && "Buy more RAM");
 
   int index = 0;
@@ -192,10 +246,18 @@ StringList string_split(String str, char separator) {
   for (int i = 0; i < str.length; ++i) {
     if (str.content[i] == separator) {
       if (tmp_text[0] == '\0') {
-          splits[index] = string_new("");
+          splits[index] = string_new(""
+#ifdef ARENA
+                  , a, cb
+#endif
+                  );
       }
       else {
-          splits[index] = string_new(tmp_text);
+          splits[index] = string_new(tmp_text
+#ifdef ARENA
+                  , a, cb
+#endif
+                  );
       }
       index++;
       tmp_text[0] = '\0';
@@ -207,7 +269,11 @@ StringList string_split(String str, char separator) {
   }
 
   if (cstring_len(tmp_text) > 0) {
-    splits[index] = string_new(tmp_text);
+    splits[index] = string_new(tmp_text
+#ifdef ARENA
+                  , a, cb
+#endif
+            );
   }
 
   StringList list = {

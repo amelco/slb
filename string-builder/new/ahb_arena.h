@@ -12,6 +12,7 @@ typedef struct {
 } Arena;
 
 void  arena_alloc(Arena* a);
+void  arena_alloc_size(Arena* a, size_t size_in_bytes);
 void* arena_add(Arena* a, size_t size);
 void  arena_free(Arena* a);
 
@@ -22,6 +23,13 @@ void  arena_free(Arena* a);
 
 void arena_alloc(Arena* a) {
 	a->size = ARENA_SIZE;
+	a->bytes = calloc(a->size, sizeof(char*));
+	assert(a->bytes && "Buy more RAM.");
+	a->index = 0;
+}
+
+void  arena_alloc_size(Arena* a, size_t size_in_bytes) {
+	a->size = size_in_bytes;
 	a->bytes = calloc(a->size, sizeof(char*));
 	assert(a->bytes && "Buy more RAM.");
 	a->index = 0;

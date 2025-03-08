@@ -7,9 +7,9 @@
 
 int main()
 {
-  ahb_sb_init_arena(1024*1024); // TODO: give meaningful error when arena is too small. Currently, it's just crashing.
-
-  String teste = string_new("Hello, World!");
+  Arena a = {0};
+  arena_alloc(&a);
+  String teste = string_new("Hello, World!", &a, arena_add);
   assert(teste.length == 13);
   assert(teste.length < teste.capacity);
 
@@ -17,12 +17,12 @@ int main()
   assert(strcmp(cstr, teste.content) == 0);
   assert(cstr[teste.length] == '\0');
 
-  string_append(&teste, " Ola Mundo!");
+  string_append(&teste, " Ola Mundo!", &a, arena_add);
   assert(teste.length == 24);
   assert(teste.length < teste.capacity);
    
-  String abc = string_new("ABC,D,EFKJH,alo,,dsa");
-  StringList sl = string_split(abc, ',');
+  String abc = string_new("ABC,D,EFKJH,alo,,dsa",&a, arena_add);
+  StringList sl = string_split(abc, ',', &a, arena_add);
   assert(sl.size == 6);
   assert(strcmp(sl.items[0].content, "ABC") == 0);
   assert(strcmp(sl.items[1].content, "D") == 0);
@@ -48,10 +48,10 @@ int main()
   index = string_next_index(&abc);
   assert(index == IDX_NO_MORE_ENTRIES);
 
-  String substr = string_substring(abc, 6, 11);
+  String substr = string_substring(abc, 6, 11, &a, arena_add);
   assert(strcmp(substr.content, "EFKJH") == 0);
 
-  String substr_fail = string_substring(abc, 11, 6);
+  String substr_fail = string_substring(abc, 11, 6, &a, arena_add);
   assert(substr_fail.length == 0);
 
   printf("All tests completed succesfully.\n");
